@@ -2,6 +2,17 @@
 
 Experience distraction-free browsing on e-ink devices with a KOReader-native workflow. Choose between Markdown, CRE, or MuPDF rendering to balance readability and fidelity while keeping navigation lightweight.
 
+## Default setup
+
+Install the plugin, restart KOReader, and open **Web Browser** from the search menu.
+No configuration file, account, API key, or paid service is required. The built-in
+setup uses **DuckDuckGo** search and **CRE** rendering, with images and website
+stylesheets disabled. DuckDuckGo can temporarily rate-limit frequent searches;
+opening a known address with **Go** does not use a search API.
+
+Language and country changes made in the settings menu are saved between restarts.
+**Reset to Defaults** restores the built-in setup plus any optional custom overrides.
+
 ## Features
 - **Search dialog**: Launch queries directly from KOReader using a custom dialog tailored for e-ink interaction, and open the **History** list to revisit recent searches without retyping them.
 - **Curated results list**: Browse plaintext summaries before opening pages, reducing bandwidth and rendering overhead. Long-press a result to open the context menu for quick actions such as saving a bookmark.
@@ -254,14 +265,15 @@ The integration automatically uses your RSS Reader configuration:
 - **Site restrictions**: Some websites block automated Markdown conversion or content extraction. In such cases, you can manually enable the **CRE** or **MuPDF** render mode in your configuration file to display the page content directly.
 
 ## Getting Started
-- **Download & rename**: Either downlaod a release from the [ releases](https://github.com/omer-faruq/webbrowser.koplugin/releases) or Clone or download this repository and rename the top-level folder to `webbrowser.koplugin/`.
+- **Download & rename**: Clone or [download this fork](https://github.com/fivetwentythree/webbrowser.koplugin/archive/refs/heads/main.zip) and rename the top-level folder to `webbrowser.koplugin/`.
 - **Copy to device**: Place the folder inside your KOReader plugins directory (varies by platform):
   - Kobo: `.adds/koreader/plugins/`
   - Kindle: `koreader/plugins/`
   - PocketBook: `applications/koreader/plugins/`
   - Android: `koreader/plugins/`
   - macOS: `~/Library/Application Support/koreader/plugins/`
-- **Configuration file**: In `webbrowser.koplugin/`, create or edit `webbrowser_configuration.lua` to adjust settings like search engine keys, render modes, or feature toggles. You can make a copy of the file `webbrowser_configuration.sample.lua` and rename it to `webbrowser_configuration.lua`, and edit it.
+- **Restart KOReader**: Open **Web Browser** from the search menu. DuckDuckGo and CRE are ready to use.
+- **Advanced configuration (optional)**: Create `webbrowser_configuration.lua` only to customize rendering or add providers such as Brave, Tavily, Exa, or Kiwix. You can copy `webbrowser_configuration.sample.lua` as a starting point. Custom files override the built-in defaults, so they may contain only the options you want to change. Existing custom configurations remain supported. If a custom file cannot be loaded, the plugin uses the built-in setup and records the error in KOReader's log.
 - **Custom cache location** (optional): By default, cached articles are stored in `.../koreader/cache/webbrowser`. To use a custom location, set `cache_directory = "/path/to/your/folder"` in `webbrowser_configuration.lua`. This is useful for organizing offline articles in a preferred location or switching between folders easily. **Important**: When using a custom cache directory, the "Clear cache" button will be automatically disabled for safety reasons to prevent accidental deletion of important files. You will need to manually clear the cache folder if needed. 
 - **Search the web**: Choose "Web Browser" from the main menu under the search category and enter a query in the search dialog.
  - **Navigate results**: Tap a result to render it with the currently selected mode (Markdown, CRE, or MuPDF). You can continue reading by opening subsequent pages through their links. In Markdown mode you can return to the previous page with the back button, while CRE and MuPDF modes rely on KOReader's history function to revisit earlier pages.
@@ -273,9 +285,16 @@ The integration automatically uses your RSS Reader configuration:
 - **Mind the rate limit**: The Markdown gateway and initial CRE/MuPDF downloads benefit from short pauses when opening many pages in succession.
 - **Keep web cache tidy**: Disable the `keep_old_website_files` option if you prefer to discard previously downloaded CRE or MuPDF pages automatically, or periodically use the **Clear cache** button in the search dialog when that option is enabled.
 
+## Development checks
+
+From the repository root, run `luajit tests/config_spec.lua` and
+`luajit tests/startup_spec.lua`. These checks cover startup without a config file,
+optional overrides, saved preferences, and resetting defaults without a device.
+
 ## Credits
 - **Built with Windsurf**: This KOReader web browser plugin was implemented through a Windsurf-assisted development workflow.
 - **MuPDF workflow inspiration**: HTML-to-MuPDF handling was adapted from [Frenzie](https://github.com/Frenzie)'s repository, many thanks!
 
 ## License
 - **GPL-3.0**: Distributed under the KOReader project license. See the root `LICENSE` file for full terms.
+

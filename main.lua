@@ -33,9 +33,11 @@ local LuaSettings = require("luasettings")
 local MarkdownViewer = require("webbrowser_markdown_viewer")
 local Utils = require("webbrowser_utils")
 local MuPDFRenderer = require("webbrowser_renderer")
-local config_loaded, config_result = pcall(require, "webbrowser_configuration")
-local CONFIG = config_loaded and config_result or {}
-local CONFIG_MISSING = not config_loaded
+local Config = require("webbrowser_config")
+local CONFIG, CUSTOM_CONFIG_LOADED, CONFIG_ERROR = Config.load()
+if CONFIG_ERROR then
+    logger.warn("webbrowser", "Invalid optional configuration; using built-in defaults", CONFIG_ERROR)
+end
 local BookmarksStore = require("webbrowser_bookmarks")
 local SearchHistoryStore = require("webbrowser_history")
 local WebsiteHistoryStore = require("webbrowser_website_history")
@@ -1532,7 +1534,7 @@ function WebBrowser:getSettingsFilePath()
 end
 
 function WebBrowser:getConfigModTime()
-    if CONFIG_MISSING then
+    if not CUSTOM_CONFIG_LOADED then
         return 0
     end
     
@@ -1562,44 +1564,40 @@ function WebBrowser:loadSettings()
     local settings_path = self:getSettingsFilePath()
     self.settings = LuaSettings:open(settings_path)
     
-    if not CONFIG_MISSING then
-        local current_mtime = self:getConfigModTime()
-        local saved_mtime = self.settings:readSetting("config_last_mtime") or 0
+    local current_mtime = self:getConfigModTime()
+    local saved_mtime = self.settings:readSetting("config_last_mtime") or 0
+    
+    local config_changed = (current_mtime ~= saved_mtime)
+    
+    if config_changed then
+        self.settings:saveSetting("config_last_mtime", current_mtime)
+        self.settings:flush()
+    else
+        local saved_engine = self.settings:readSetting("engine")
+        if type(saved_engine) == "string" and CONFIG.engines[saved_engine] then
+            CONFIG.engine = saved_engine
+        end
         
-        local config_changed = (current_mtime ~= saved_mtime)
-        
-        if config_changed then
-            self.settings:saveSetting("config_last_mtime", current_mtime)
-            self.settings:flush()
-        else
-            local saved_engine = self.settings:readSetting("engine")
-            if saved_engine and saved_engine ~= "" then
-                CONFIG.engine = saved_engine
-            end
-            
-            local engines = CONFIG.engines or {}
-            for engine_name, engine_config in pairs(engines) do
-                local saved_language = self.settings:readSetting(engine_name .. "_language")
-                if saved_language and saved_language ~= "" then
-                    if engine_name == "duckduckgo" and saved_language:find("-") then
-                        local parts = {}
-                        for part in saved_language:gmatch("[^-]+") do
-                            table.insert(parts, part)
-                        end
-                        if #parts == 2 then
-                            local first, second = parts[1]:lower(), parts[2]:lower()
-                            if #first == 2 and #second == 2 then
-                                local lang_codes = {en=true, pt=true, es=true, fr=true, de=true, it=true, tr=true, ar=true, zh=true, ja=true, ko=true, he=true, el=true, cs=true, da=true, et=true, fi=true, hu=true, id=true, ms=true, nl=true, no=true, pl=true, ro=true, ru=true, sk=true, sl=true, sv=true, th=true, uk=true, vi=true, bg=true, hr=true, lt=true, lv=true, ca=true, tl=true}
-                                local country_codes = {br=true, tr=true, us=true, uk=true, au=true, ca=true, de=true, fr=true, es=true, it=true, nl=true, pl=true, ru=true, jp=true, cn=true, kr=true, ["in"]=true, za=true, mx=true, ar=true, cl=true, co=true, pe=true, ve=true, at=true, be=true, ch=true, cz=true, dk=true, ee=true, fi=true, gr=true, hr=true, hu=true, ie=true, il=true, lt=true, lv=true, no=true, nz=true, ph=true, pt=true, ro=true, se=true, sg=true, sk=true, sl=true, th=true, tw=true, ua=true, vn=true, hk=true, id=true, my=true, bg=true, xa=true, ct=true, xl=true, ue=true, wt=true}
-                                if lang_codes[first] and country_codes[second] then
-                                    engine_config.language = first
-                                    engine_config.country = second
-                                elseif country_codes[first] and lang_codes[second] then
-                                    engine_config.language = second
-                                    engine_config.country = first
-                                else
-                                    engine_config.language = saved_language
-                                end
+        local engines = CONFIG.engines or {}
+        for engine_name, engine_config in pairs(engines) do
+            local saved_language = self.settings:readSetting(engine_name .. "_language")
+            if saved_language and saved_language ~= "" then
+                if engine_name == "duckduckgo" and saved_language:find("-") then
+                    local parts = {}
+                    for part in saved_language:gmatch("[^-]+") do
+                        table.insert(parts, part)
+                    end
+                    if #parts == 2 then
+                        local first, second = parts[1]:lower(), parts[2]:lower()
+                        if #first == 2 and #second == 2 then
+                            local lang_codes = {en=true, pt=true, es=true, fr=true, de=true, it=true, tr=true, ar=true, zh=true, ja=true, ko=true, he=true, el=true, cs=true, da=true, et=true, fi=true, hu=true, id=true, ms=true, nl=true, no=true, pl=true, ro=true, ru=true, sk=true, sl=true, sv=true, th=true, uk=true, vi=true, bg=true, hr=true, lt=true, lv=true, ca=true, tl=true}
+                            local country_codes = {br=true, tr=true, us=true, uk=true, au=true, ca=true, de=true, fr=true, es=true, it=true, nl=true, pl=true, ru=true, jp=true, cn=true, kr=true, ["in"]=true, za=true, mx=true, ar=true, cl=true, co=true, pe=true, ve=true, at=true, be=true, ch=true, cz=true, dk=true, ee=true, fi=true, gr=true, hr=true, hu=true, ie=true, il=true, lt=true, lv=true, no=true, nz=true, ph=true, pt=true, ro=true, se=true, sg=true, sk=true, sl=true, th=true, tw=true, ua=true, vn=true, hk=true, id=true, my=true, bg=true, xa=true, ct=true, xl=true, ue=true, wt=true}
+                            if lang_codes[first] and country_codes[second] then
+                                engine_config.language = first
+                                engine_config.country = second
+                            elseif country_codes[first] and lang_codes[second] then
+                                engine_config.language = second
+                                engine_config.country = first
                             else
                                 engine_config.language = saved_language
                             end
@@ -1609,49 +1607,51 @@ function WebBrowser:loadSettings()
                     else
                         engine_config.language = saved_language
                     end
+                else
+                    engine_config.language = saved_language
                 end
-                
-                local saved_country = self.settings:readSetting(engine_name .. "_country")
-                if saved_country and saved_country ~= "" then
-                    engine_config.country = saved_country
-                end
-                
-                local saved_search_depth = self.settings:readSetting(engine_name .. "_search_depth")
-                if saved_search_depth and saved_search_depth ~= "" then
-                    engine_config.search_depth = saved_search_depth
-                end
-                
-                local saved_topic = self.settings:readSetting(engine_name .. "_topic")
-                if saved_topic and saved_topic ~= "" then
-                    engine_config.topic = saved_topic
-                end
-                
-                local saved_search_type = self.settings:readSetting(engine_name .. "_search_type")
-                if saved_search_type and saved_search_type ~= "" then
-                    engine_config.search_type = saved_search_type
-                end
-                
-                local saved_category = self.settings:readSetting(engine_name .. "_category")
-                if saved_category and saved_category ~= "" then
-                    engine_config.category = saved_category
-                end
-                
-                local saved_user_location = self.settings:readSetting(engine_name .. "_user_location")
-                if saved_user_location and saved_user_location ~= "" then
-                    engine_config.user_location = saved_user_location
+            end
+            
+            local saved_country = self.settings:readSetting(engine_name .. "_country")
+            if saved_country and saved_country ~= "" then
+                engine_config.country = saved_country
+            end
+            
+            local saved_search_depth = self.settings:readSetting(engine_name .. "_search_depth")
+            if saved_search_depth and saved_search_depth ~= "" then
+                engine_config.search_depth = saved_search_depth
+            end
+            
+            local saved_topic = self.settings:readSetting(engine_name .. "_topic")
+            if saved_topic and saved_topic ~= "" then
+                engine_config.topic = saved_topic
+            end
+            
+            local saved_search_type = self.settings:readSetting(engine_name .. "_search_type")
+            if saved_search_type and saved_search_type ~= "" then
+                engine_config.search_type = saved_search_type
+            end
+            
+            local saved_category = self.settings:readSetting(engine_name .. "_category")
+            if saved_category and saved_category ~= "" then
+                engine_config.category = saved_category
+            end
+            
+            local saved_user_location = self.settings:readSetting(engine_name .. "_user_location")
+            if saved_user_location and saved_user_location ~= "" then
+                engine_config.user_location = saved_user_location
+            end
+
+            if engine_config.name == "kiwix" then
+                local saved_base_url = self.settings:readSetting(engine_name .. "_base_url")
+                if saved_base_url and saved_base_url ~= "" then
+                    engine_config.base_url = saved_base_url
                 end
 
-                if engine_config.name == "kiwix" then
-                    local saved_base_url = self.settings:readSetting(engine_name .. "_base_url")
-                    if saved_base_url and saved_base_url ~= "" then
-                        engine_config.base_url = saved_base_url
-                    end
-
-                    -- "" was stored deliberately and means "search every archive"
-                    local saved_book_name = self.settings:readSetting(engine_name .. "_book_name")
-                    if saved_book_name then
-                        engine_config.book_name = saved_book_name ~= "" and saved_book_name or nil
-                    end
+                -- "" was stored deliberately and means "search every archive"
+                local saved_book_name = self.settings:readSetting(engine_name .. "_book_name")
+                if saved_book_name then
+                    engine_config.book_name = saved_book_name ~= "" and saved_book_name or nil
                 end
             end
         end
@@ -1663,94 +1663,92 @@ function WebBrowser:saveSettings(specific_engine)
         return
     end
     
-    if not CONFIG_MISSING then
-        if CONFIG.engine then
-            self.settings:saveSetting("engine", CONFIG.engine)
-        end
-        
-        local engines = CONFIG.engines or {}
-        if specific_engine then
-            local engine_config = engines[specific_engine]
-            if engine_config then
-                if engine_config.language then
-                    self.settings:saveSetting(specific_engine .. "_language", engine_config.language)
-                end
-                if engine_config.country then
-                    self.settings:saveSetting(specific_engine .. "_country", engine_config.country)
-                end
-                if engine_config.search_depth then
-                    self.settings:saveSetting(specific_engine .. "_search_depth", engine_config.search_depth)
-                end
-                if engine_config.topic then
-                    self.settings:saveSetting(specific_engine .. "_topic", engine_config.topic)
-                end
-                if engine_config.search_type then
-                    self.settings:saveSetting(specific_engine .. "_search_type", engine_config.search_type)
-                end
-                if engine_config.category then
-                    self.settings:saveSetting(specific_engine .. "_category", engine_config.category)
-                end
-                if engine_config.user_location then
-                    self.settings:saveSetting(specific_engine .. "_user_location", engine_config.user_location)
-                end
-                -- Only kiwix exposes these in the UI. Persisting them for the
-                -- other engines would let a stale value shadow config.lua.
-                if engine_config.name == "kiwix" then
-                    if engine_config.base_url then
-                        self.settings:saveSetting(specific_engine .. "_base_url", engine_config.base_url)
-                    end
-                    -- an empty archive name is a real choice ("search all"),
-                    -- so it has to be written out rather than skipped
-                    self.settings:saveSetting(specific_engine .. "_book_name", engine_config.book_name or "")
-                end
-            end
-        else
-            for engine_name, engine_config in pairs(engines) do
-                if engine_config.language then
-                    self.settings:saveSetting(engine_name .. "_language", engine_config.language)
-                end
-                if engine_config.country then
-                    self.settings:saveSetting(engine_name .. "_country", engine_config.country)
-                end
-                if engine_config.search_depth then
-                    self.settings:saveSetting(engine_name .. "_search_depth", engine_config.search_depth)
-                end
-                if engine_config.topic then
-                    self.settings:saveSetting(engine_name .. "_topic", engine_config.topic)
-                end
-                if engine_config.search_type then
-                    self.settings:saveSetting(engine_name .. "_search_type", engine_config.search_type)
-                end
-                if engine_config.category then
-                    self.settings:saveSetting(engine_name .. "_category", engine_config.category)
-                end
-                if engine_config.user_location then
-                    self.settings:saveSetting(engine_name .. "_user_location", engine_config.user_location)
-                end
-                if engine_config.name == "kiwix" then
-                    if engine_config.base_url then
-                        self.settings:saveSetting(engine_name .. "_base_url", engine_config.base_url)
-                    end
-                    self.settings:saveSetting(engine_name .. "_book_name", engine_config.book_name or "")
-                end
-            end
-        end
-        
-        local current_mtime = self:getConfigModTime()
-        self.settings:saveSetting("config_last_mtime", current_mtime)
+    if CONFIG.engine then
+        self.settings:saveSetting("engine", CONFIG.engine)
     end
+    
+    local engines = CONFIG.engines or {}
+    if specific_engine then
+        local engine_config = engines[specific_engine]
+        if engine_config then
+            if engine_config.language then
+                self.settings:saveSetting(specific_engine .. "_language", engine_config.language)
+            end
+            if engine_config.country then
+                self.settings:saveSetting(specific_engine .. "_country", engine_config.country)
+            end
+            if engine_config.search_depth then
+                self.settings:saveSetting(specific_engine .. "_search_depth", engine_config.search_depth)
+            end
+            if engine_config.topic then
+                self.settings:saveSetting(specific_engine .. "_topic", engine_config.topic)
+            end
+            if engine_config.search_type then
+                self.settings:saveSetting(specific_engine .. "_search_type", engine_config.search_type)
+            end
+            if engine_config.category then
+                self.settings:saveSetting(specific_engine .. "_category", engine_config.category)
+            end
+            if engine_config.user_location then
+                self.settings:saveSetting(specific_engine .. "_user_location", engine_config.user_location)
+            end
+            -- Only kiwix exposes these in the UI. Persisting them for the
+            -- other engines would let a stale value shadow config.lua.
+            if engine_config.name == "kiwix" then
+                if engine_config.base_url then
+                    self.settings:saveSetting(specific_engine .. "_base_url", engine_config.base_url)
+                end
+                -- an empty archive name is a real choice ("search all"),
+                -- so it has to be written out rather than skipped
+                self.settings:saveSetting(specific_engine .. "_book_name", engine_config.book_name or "")
+            end
+        end
+    else
+        for engine_name, engine_config in pairs(engines) do
+            if engine_config.language then
+                self.settings:saveSetting(engine_name .. "_language", engine_config.language)
+            end
+            if engine_config.country then
+                self.settings:saveSetting(engine_name .. "_country", engine_config.country)
+            end
+            if engine_config.search_depth then
+                self.settings:saveSetting(engine_name .. "_search_depth", engine_config.search_depth)
+            end
+            if engine_config.topic then
+                self.settings:saveSetting(engine_name .. "_topic", engine_config.topic)
+            end
+            if engine_config.search_type then
+                self.settings:saveSetting(engine_name .. "_search_type", engine_config.search_type)
+            end
+            if engine_config.category then
+                self.settings:saveSetting(engine_name .. "_category", engine_config.category)
+            end
+            if engine_config.user_location then
+                self.settings:saveSetting(engine_name .. "_user_location", engine_config.user_location)
+            end
+            if engine_config.name == "kiwix" then
+                if engine_config.base_url then
+                    self.settings:saveSetting(engine_name .. "_base_url", engine_config.base_url)
+                end
+                self.settings:saveSetting(engine_name .. "_book_name", engine_config.book_name or "")
+            end
+        end
+    end
+    
+    local current_mtime = self:getConfigModTime()
+    self.settings:saveSetting("config_last_mtime", current_mtime)
     
     self.settings:flush()
 end
 
 function WebBrowser:resetToConfigDefaults()
-    if not self.settings or CONFIG_MISSING then
+    if not self.settings then
         return
     end
     
     local ConfirmBox = require("ui/widget/confirmbox")
     UIManager:show(ConfirmBox:new {
-        text = _("Reset all settings to config file defaults?\n\nThis will clear your UI preferences and reload settings from webbrowser_configuration.lua."),
+        text = _("Reset browser preferences to defaults?\n\nThis will reload the built-in defaults and any optional webbrowser_configuration.lua overrides."),
         ok_text = _("Reset"),
         ok_callback = function()
             self.settings:delSetting("engine")
@@ -1769,12 +1767,9 @@ function WebBrowser:resetToConfigDefaults()
             
             self.settings:flush()
             
-            package.loaded["webbrowser_configuration"] = nil
-            local config_loaded, config_result = pcall(require, "webbrowser_configuration")
-            if config_loaded then
-                for key, value in pairs(config_result) do
-                    CONFIG[key] = value
-                end
+            CONFIG, CUSTOM_CONFIG_LOADED, CONFIG_ERROR = Config.load(true)
+            if CONFIG_ERROR then
+                logger.warn("webbrowser", "Invalid optional configuration; using built-in defaults", CONFIG_ERROR)
             end
             
             if self.search_dialog then
@@ -1785,7 +1780,7 @@ function WebBrowser:resetToConfigDefaults()
             self:loadSettings()
             
             UIManager:show(InfoMessage:new {
-                text = _("Settings reset to config defaults"),
+                text = _("Settings reset to defaults"),
                 timeout = 2,
             })
             
@@ -2072,10 +2067,6 @@ function WebBrowser:addToHighlightDialog()
 end
 
 function WebBrowser:showEngineSettings()
-    if CONFIG_MISSING then
-        return
-    end
-
     local config, profile_key = self:getSearchEngineConfig()
     local engine_type = self:extractEngineTypeFromProfileKey(profile_key)
     local engine_display = self:getSearchEngineDisplayName()
@@ -2142,7 +2133,7 @@ function WebBrowser:showEngineSettings()
 
     table.insert(buttons, {
         {
-            text = _("Reset to Config Defaults"),
+            text = _("Reset to Defaults"),
             background = Blitbuffer.COLOR_WHITE,
             callback = function()
                 UIManager:close(engine_settings_dialog)
@@ -2159,10 +2150,6 @@ function WebBrowser:showEngineSettings()
 end
 
 function WebBrowser:showEngineSelector()
-    if CONFIG_MISSING then
-        return
-    end
-
     local engines = CONFIG.engines or {}
     local current_profile = self:getSelectedProfileKey()
     local buttons = {}
@@ -2233,10 +2220,6 @@ function WebBrowser:showEngineSelector()
 end
 
 function WebBrowser:showKiwixSettings()
-    if CONFIG_MISSING then
-        return
-    end
-
     local config, engine_name = self:getSearchEngineConfig()
     if not config then
         return
@@ -2427,10 +2410,6 @@ function WebBrowser:showKiwixArchiveSelector()
 end
 
 function WebBrowser:showTavilySettings()
-    if CONFIG_MISSING then
-        return
-    end
-
     local config, engine_name = self:getSearchEngineConfig()
     if not config then
         return
@@ -2515,10 +2494,6 @@ function WebBrowser:showTavilySettings()
 end
 
 function WebBrowser:showExaSettings()
-    if CONFIG_MISSING then
-        return
-    end
-
     local config, engine_name = self:getSearchEngineConfig()
     if not config then
         return
@@ -2605,10 +2580,6 @@ function WebBrowser:showExaSettings()
 end
 
 function WebBrowser:showLanguageSettings()
-    if CONFIG_MISSING then
-        return
-    end
-
     local config, profile_key = self:getSearchEngineConfig()
     if not config then
         return
@@ -2689,14 +2660,6 @@ function WebBrowser:showLanguageSettings()
 end
 
 function WebBrowser:showSearchDialog(initial_input)
-    if CONFIG_MISSING then
-        UIManager:show(InfoMessage:new {
-            text = _("Web browser configuration file not found. Copy 'webbrowser_configuration.sample.lua' to 'webbrowser_configuration.lua' inside the webbrowser plugin folder."),
-            timeout = 10,
-        })
-        return
-    end
-
     if self.search_dialog and self.search_dialog.dialog_open then
         return
     end
@@ -5180,3 +5143,4 @@ function WebBrowser:handleFetchError(err, reopen_results)
 end
 
 return WebBrowser
+
