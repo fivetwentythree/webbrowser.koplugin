@@ -1,7 +1,11 @@
+-- Optional: the plugin already works with DuckDuckGo and CRE without this file.
+-- Copy this file to webbrowser_configuration.lua only to customize the defaults
+-- or configure additional search providers with your own API keys.
 return {
     -- Selected engine profile key (can be engine type like "brave_api" or custom profile like "brave_personal")
-    engine = "brave_api", -- options: "duckduckgo", "brave_api", "tavily_api", "exa_api", "kiwix" (offline), "google_api" (deprecated)
-    -- RECOMMENDED: Use "brave_api" or "tavily_api" for best reliability and sustained use.
+    engine = "duckduckgo", -- options: "duckduckgo", "brave_api", "tavily_api", "exa_api", "kiwix" (offline), "google_api" (deprecated)
+    -- DuckDuckGo needs no account or API key, but may rate-limit frequent searches.
+    -- Brave, Tavily, and Exa are optional and require your own API keys.
     -- Google API is deprecated for new users (existing users can use until January 2027).
     -- 
     -- MULTIPLE PROFILES: You can define multiple profiles for the same engine type.
